@@ -92,11 +92,9 @@ pub fn read_log(input: std::rc::Rc<std::cell::RefCell<Box<dyn MyReader>>>, mode:
             }
             request_id_found
         }
-        // подсказка: лучше match
-        && if mode == ReadMode::All {
-                true
-            }
-            else if mode == ReadMode::Errors {
+        && match mode {
+            ReadMode::All => true,
+            ReadMode::Errors => {
                 matches!(
                     &log.kind,
                     LogKind::System(
@@ -104,7 +102,7 @@ pub fn read_log(input: std::rc::Rc<std::cell::RefCell<Box<dyn MyReader>>>, mode:
                     )
                 )
             }
-            else if mode == ReadMode::Exchanges {
+            ReadMode::Exchanges => {
                 matches!(
                     &log.kind,
                     LogKind::App(AppLogKind::Journal(
@@ -117,10 +115,7 @@ pub fn read_log(input: std::rc::Rc<std::cell::RefCell<Box<dyn MyReader>>>, mode:
                     ))
                 )
             }
-            else {
-                // подсказка: паниковать в библиотечном коде - нехорошо
-                panic!("unknown mode {:?}", mode)
-            }
+        }
         {
             collected.push(log);
         }
