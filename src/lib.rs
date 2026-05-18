@@ -1,13 +1,14 @@
 pub mod parse;
+
+use std::cmp::PartialEq;
 use parse::*;
 
-// подсказка: лучше использовать enum и match
-/// Режим чтения из логов всего подряд
-pub const READ_MODE_ALL: u8 = 0;
-/// Режим чтения из логов только ошибок
-pub const READ_MODE_ERRORS: u8 = 1;
-/// Режим чтения из логов только операций, касающихся деген
-pub const READ_MODE_EXCHANGES: u8 = 2;
+#[derive(Debug)]
+pub enum ReadMode {
+    All,
+    Errors,
+    Exchanges
+}
 
 /// Обёртка, без которой не выполнено требование `std::io::BufReader<T: std::io::Read>`
 #[derive(Debug)]
@@ -68,9 +69,15 @@ impl Iterator for LogIterator {
     }
 }
 
+impl PartialEq for ReadMode {
+    fn eq(&self, other: &Self) -> bool {
+        todo!()
+    }
+}
+
 // подсказка: RefCell вообще не нужен
 /// Принимает поток байт, отдаёт отфильтрованные и распарсенные логи
-pub fn read_log(input: std::rc::Rc<std::cell::RefCell<Box<dyn MyReader>>>, mode: u8, request_ids: Vec<u32>) -> Vec<LogLine> {
+pub fn read_log(input: std::rc::Rc<std::cell::RefCell<Box<dyn MyReader>>>, mode: ReadMode, request_ids: Vec<u32>) -> Vec<LogLine> {
     let logs = LogIterator::new(input);
     let mut collected = Vec::new();
     // подсказка: можно обойтись итераторами
@@ -86,10 +93,10 @@ pub fn read_log(input: std::rc::Rc<std::cell::RefCell<Box<dyn MyReader>>>, mode:
             request_id_found
         }
         // подсказка: лучше match
-        && if mode == READ_MODE_ALL {
+        && if mode == ReadMode::All {
                 true
             }
-            else if mode == READ_MODE_ERRORS {
+            else if mode == ReadMode::Errors {
                 matches!(
                     &log.kind,
                     LogKind::System(
@@ -97,7 +104,7 @@ pub fn read_log(input: std::rc::Rc<std::cell::RefCell<Box<dyn MyReader>>>, mode:
                     )
                 )
             }
-            else if mode == READ_MODE_EXCHANGES {
+            else if mode == ReadMode::Exchanges {
                 matches!(
                     &log.kind,
                     LogKind::App(AppLogKind::Journal(
@@ -112,7 +119,7 @@ pub fn read_log(input: std::rc::Rc<std::cell::RefCell<Box<dyn MyReader>>>, mode:
             }
             else {
                 // подсказка: паниковать в библиотечном коде - нехорошо
-                panic!("unknown mode {}", mode)
+                panic!("unknown mode {:?}", mode)
             }
         {
             collected.push(log);
@@ -196,9 +203,9 @@ App::Journal BuyAsset UserBacket{"user_id":"Alice","backet":Backet{"asset_id":"m
     #[test]
     fn test_all() {
         let refcell1: std::rc::Rc<std::cell::RefCell<Box<dyn MyReader>>> = std::rc::Rc::new(std::cell::RefCell::new(Box::new(SOURCE1.as_bytes())));
-        assert_eq!(read_log(refcell1.clone(), READ_MODE_ALL, vec![]).len(), 1);
+        assert_eq!(read_log(refcell1.clone(), ReadMode::All, vec![]).len(), 1);
         let refcell: std::rc::Rc<std::cell::RefCell<Box<dyn MyReader>>> = std::rc::Rc::new(std::cell::RefCell::new(Box::new(SOURCE.as_bytes())));
-        let all_parsed = read_log(refcell.clone(), READ_MODE_ALL, vec![]);
+        let all_parsed = read_log(refcell.clone(), ReadMode::All, vec![]);
         println!("all parsed:");
         all_parsed.iter().for_each(|parsed| println!("  {:?}", parsed));
         // 2 для начала и конца строки (чтобы первая и последняя кавычки на отдельных строках были)
