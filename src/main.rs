@@ -15,6 +15,7 @@
 //  -- по изменению счёта (купить/продать)
 
 use analysis::ReadMode;
+use std::io::BufReader;
 
 // Модель данных:
 // - Пользователь (userid, имя)
@@ -50,7 +51,7 @@ use analysis::ReadMode;
 //  -- Error
 //   --- нет сети
 //   --- отказано в доступе
-fn main() {
+fn main() -> std::io::Result<()> {
     println!("Placeholder для экспериментов с cli");
 
     let parsing_demo = r#"[UserBackets{"user_id":"Bob","backets":[Backet{"asset_id":"milk","count":3,},],},]"#.to_string();
@@ -59,11 +60,14 @@ fn main() {
 
     let args = std::env::args().collect::<Vec<_>>();
     let filename = args[1].clone();
-    println!("Trying opening file '{}' from directory '{}'", filename, std::env::current_dir().unwrap().to_string_lossy());
-    let file: std::rc::Rc<std::cell::RefCell<Box<dyn analysis::MyReader>>> = std::rc::Rc::new(std::cell::RefCell::new(Box::new(std::fs::File::open(filename).unwrap())));
+    println!("Trying opening file '{}' from directory '{}'", filename, std::env::current_dir()?.to_string_lossy());
 
-    let logs = analysis::read_log(file.clone(), ReadMode::All, vec![]);
+    let file = std::fs::File::open(filename)?;
+    let buf_reader = BufReader::new(file);
+
+    let logs = analysis::read_log(buf_reader, ReadMode::All, vec![]);
     println!("got logs:");
     logs.iter().for_each(|parsed| println!("  {:?}", parsed));
-}
 
+    Ok(())
+}

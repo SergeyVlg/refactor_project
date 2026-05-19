@@ -1,6 +1,6 @@
 pub mod parse;
 
-use std::cmp::PartialEq;
+use std::io::{Read};
 use parse::*;
 
 #[derive(Debug)]
@@ -10,75 +10,58 @@ pub enum ReadMode {
     Exchanges
 }
 
-/// Обёртка, без которой не выполнено требование `std::io::BufReader<T: std::io::Read>`
-#[derive(Debug)]
-struct RefMutWrapper<'a, T>(std::cell::RefMut<'a, T>);
-impl<'a, T> std::io::Read for RefMutWrapper<'a, T>
-where T: std::io::Read
-{
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        self.0.read(buf)
-    }
-}
-
-/// Для `Box<dyn много трейтов, помимо auto-трейтов>`, (`rustc E0225`)
-/// `only auto traits can be used as additional traits in a trait object`
-/// `consider creating a new trait with all of these as supertraits and using that trait here instead`
-pub trait MyReader: std::io::Read + std::fmt::Debug + 'static
-{}
-impl<T: std::io::Read + std::fmt::Debug + 'static> MyReader for T
-{}
-// подсказка: вместо trait-объекта можно дженерик
 /// Итератор, на выходе которого - строки распарсенной структуры данных
 #[derive(Debug)]
-struct LogIterator {
-    lines: std::iter::Filter<std::io::Lines<std::io::BufReader<RefMutWrapper<'static, Box<dyn MyReader>>>>,fn(&Result<String,std::io::Error>)->bool>,
-    reader_rc: std::rc::Rc<std::cell::RefCell<Box<dyn MyReader>>>,
+struct LogIterator<R: Read> {
+    contents: String,
+    pos: usize,
+    _phantom_data: std::marker::PhantomData<R>,
 }
-impl LogIterator {
-    fn new(r: std::rc::Rc<std::cell::RefCell<Box<dyn MyReader>>>) -> Self {
-        use std::io::BufRead;
-        // подсказка: unsafe избыточен, да и весь rc - тоже
-        // примечание автора прототипа:
-        // > Мотивация: хочу позаимствовать RefCell,
-        // > но боюсь, что Rc протухнет - поэтому буду хранить и Rc и RefMut.
-        // > Я знаю, что деструкторы полей структуры вызываются в
-        // > порядке объявления в структуре - то есть сначала будет удалён
-        // > мой RefMutWrapper, а уже потом и весь исходный reader_rc
-        let the_borrow = r.borrow_mut();
-        let the_borrow = unsafe{std::mem::transmute::<_,_>(the_borrow)};
-        Self{
-            lines: std::io::BufReader::with_capacity(4096, RefMutWrapper(the_borrow))
-                       .lines()
-                       .filter(
-                           |line_res|
-                           !line_res.as_ref().ok()
-                               .map(|line| line.trim().is_empty())
-                               .unwrap_or(false)
-                        ),
-            reader_rc: r,
-        }
+
+impl<R: Read> LogIterator<R> {
+    fn new(mut reader: R) -> Result<Self, std::io::Error> {
+        let mut contents = String::new();
+        reader.read_to_string(&mut contents)?;
+
+        Ok(Self {
+            contents,
+            pos: 0,
+            _phantom_data: std::marker::PhantomData,
+        })
     }
 }
-impl Iterator for LogIterator {
-    type Item = parse::LogLine;
+
+impl<R: Read> Iterator for LogIterator<R> {
+    type Item = LogLine;
+
     fn next(&mut self) -> Option<Self::Item> {
-        let line = self.lines.next()?.ok()?;
-        let (remaining, result) = LOG_LINE_PARSER.parse(line.trim().to_string()).ok()?;
-        remaining.trim().is_empty().then_some(result)
+        while self.pos < self.contents.len() {
+            let rest = &self.contents[self.pos..];
+            let (line, advance) = match rest.split_once('\n') {
+                Some((line, tail)) => (line, rest.len() - tail.len()),
+                None => (rest, rest.len()),
+            };
+
+            self.pos += advance;
+
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+
+            let (remaining, result) = LOG_LINE_PARSER.parse(line.to_owned()).ok()?;
+            if remaining.trim().is_empty() {
+                return Some(result);
+            }
+        }
+
+        None
     }
 }
 
-impl PartialEq for ReadMode {
-    fn eq(&self, other: &Self) -> bool {
-        todo!()
-    }
-}
-
-// подсказка: RefCell вообще не нужен
 /// Принимает поток байт, отдаёт отфильтрованные и распарсенные логи
-pub fn read_log(input: std::rc::Rc<std::cell::RefCell<Box<dyn MyReader>>>, mode: ReadMode, request_ids: Vec<u32>) -> Vec<LogLine> {
-    let logs = LogIterator::new(input);
+pub fn read_log<R: Read>(input: R, mode: ReadMode, request_ids: Vec<u32>) -> Result<Vec<LogLine>, std::io::Error> {
+    let logs = LogIterator::new(input)?;
     let collected: Vec<LogLine> = logs
         .into_iter()
         .filter(|log| {
@@ -108,12 +91,13 @@ pub fn read_log(input: std::rc::Rc<std::cell::RefCell<Box<dyn MyReader>>>, mode:
         })
         .collect();
 
-    collected
+    Ok(collected)
 }
 
 
 #[cfg(test)]
 mod test {
+    use std::io::Cursor;
     use super::*;
 
     const SOURCE1: &'static str = r#"System::Error NetworkError "url unknown" requestid=1"#;
@@ -185,10 +169,11 @@ App::Journal BuyAsset UserBacket{"user_id":"Alice","backet":Backet{"asset_id":"m
 
     #[test]
     fn test_all() {
-        let refcell1: std::rc::Rc<std::cell::RefCell<Box<dyn MyReader>>> = std::rc::Rc::new(std::cell::RefCell::new(Box::new(SOURCE1.as_bytes())));
-        assert_eq!(read_log(refcell1.clone(), ReadMode::All, vec![]).len(), 1);
-        let refcell: std::rc::Rc<std::cell::RefCell<Box<dyn MyReader>>> = std::rc::Rc::new(std::cell::RefCell::new(Box::new(SOURCE.as_bytes())));
-        let all_parsed = read_log(refcell.clone(), ReadMode::All, vec![]);
+        let source1 = Cursor::new(SOURCE1.as_bytes());
+        assert_eq!(read_log(source1, ReadMode::All, vec![]).unwrap().len(), 1);
+
+        let source = Cursor::new(SOURCE.as_bytes());
+        let all_parsed = read_log(source, ReadMode::All, vec![]).unwrap();
         println!("all parsed:");
         all_parsed.iter().for_each(|parsed| println!("  {:?}", parsed));
         // 2 для начала и конца строки (чтобы первая и последняя кавычки на отдельных строках были)
