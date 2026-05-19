@@ -79,47 +79,35 @@ impl PartialEq for ReadMode {
 /// Принимает поток байт, отдаёт отфильтрованные и распарсенные логи
 pub fn read_log(input: std::rc::Rc<std::cell::RefCell<Box<dyn MyReader>>>, mode: ReadMode, request_ids: Vec<u32>) -> Vec<LogLine> {
     let logs = LogIterator::new(input);
-    let mut collected = Vec::new();
-    // подсказка: можно обойтись итераторами
-    for log in logs {
-        if request_ids.is_empty() || {
-            let mut request_id_found = false;
-            for request_id in &request_ids {
-                if *request_id == log.request_id {
-                    request_id_found = true;
-                    break;
+    let collected: Vec<LogLine> = logs
+        .into_iter()
+        .filter(|log| {
+            (request_ids.is_empty() || request_ids.contains(&log.request_id))
+            && match mode {
+                ReadMode::All => true,
+                ReadMode::Errors => {
+                    matches!(
+                        &log.kind,
+                        LogKind::System(SystemLogKind::Error(_)) | LogKind::App(AppLogKind::Error(_))
+                    )
+                }
+                ReadMode::Exchanges => {
+                    matches!(
+                        &log.kind,
+                        LogKind::App(AppLogKind::Journal(
+                            AppLogJournalKind::BuyAsset(_)
+                            | AppLogJournalKind::SellAsset(_)
+                            | AppLogJournalKind::CreateUser{..}
+                            | AppLogJournalKind::RegisterAsset{..}
+                            | AppLogJournalKind::DepositCash(_)
+                            | AppLogJournalKind::WithdrawCash(_)
+                        ))
+                    )
                 }
             }
-            request_id_found
-        }
-        && match mode {
-            ReadMode::All => true,
-            ReadMode::Errors => {
-                matches!(
-                    &log.kind,
-                    LogKind::System(
-                        SystemLogKind::Error(_)) | LogKind::App(AppLogKind::Error(_)
-                    )
-                )
-            }
-            ReadMode::Exchanges => {
-                matches!(
-                    &log.kind,
-                    LogKind::App(AppLogKind::Journal(
-                        AppLogJournalKind::BuyAsset(_)
-                        | AppLogJournalKind::SellAsset(_)
-                        | AppLogJournalKind::CreateUser{..}
-                        | AppLogJournalKind::RegisterAsset{..}
-                        | AppLogJournalKind::DepositCash(_)
-                        | AppLogJournalKind::WithdrawCash(_)
-                    ))
-                )
-            }
-        }
-        {
-            collected.push(log);
-        }
-    }
+        })
+        .collect();
+
     collected
 }
 
