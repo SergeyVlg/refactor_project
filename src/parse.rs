@@ -1115,10 +1115,6 @@ impl LogLineParser {
         self.parser.get_or_init(|| <LogLine as Parsable>::parser()).parse(input)
     }
 }
-// подсказка: singleton, без которого можно обойтись
-// парсеры не страшно вытащить в pub
-/// Единожды собранный парсер логов
-pub static LOG_LINE_PARSER: LogLineParser = LogLineParser{parser: std::sync::OnceLock::new()};
 
 #[cfg(test)]
 mod test {
