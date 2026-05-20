@@ -14,7 +14,9 @@ trait Parsable : Sized {
     fn parser () -> Self::Parser;
 }
 
-mod stdp { // parsers for std types
+mod stdp {
+    use std::num::NonZeroU32;
+    // parsers for std types
     use super::Parser;
 
     /// Беззнаковые числа
@@ -32,19 +34,15 @@ mod stdp { // parsers for std types
                     _ => Some(idx)
                 }
             ).unwrap_or(remaining.len());
+
             let value = u32::from_str_radix(
                     &remaining[..end_idx],
                     if is_hex {16} else {10}
                 ).map_err(|_| ())?;
-            // подсказка: вместо if можно использовать tight-тип std::num::NonZeroU32
-            //            (ограничиться NonZeroU32::new(value).ok_or(()).get() - норм)
-            //            или даже заиспользовать tightness
-            if value == 0 {
-                return Err(()); // в наших логах нет нулей, ноль в операции - фикция
-            }
+
             Ok((
                 remaining[end_idx..].to_string(),
-                value
+                NonZeroU32::new(value).ok_or(())?.get()
             ))
         }
     }
