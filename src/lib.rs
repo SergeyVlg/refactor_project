@@ -49,7 +49,7 @@ impl<R: Read> Iterator for LogIterator<R> {
                 continue;
             }
 
-            let (remaining, result) = LOG_LINE_PARSER.parse(line.to_owned()).ok()?;
+            let (remaining, result) = LOG_LINE_PARSER.parse(line).ok()?;
             if remaining.trim().is_empty() {
                 return Some(result);
             }
