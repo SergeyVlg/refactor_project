@@ -16,6 +16,7 @@
 
 use analysis::ReadMode;
 use std::io::BufReader;
+use analysis::parse::Announcements;
 
 // Модель данных:
 // - Пользователь (userid, имя)
@@ -55,7 +56,7 @@ fn main() -> std::io::Result<()> {
     println!("Placeholder для экспериментов с cli");
 
     let parsing_demo = r#"[UserBackets{"user_id":"Bob","backets":[Backet{"asset_id":"milk","count":3,},],},]"#;
-    let announcements = analysis::parse::just_parse_anouncements(parsing_demo).unwrap();
+    let announcements = analysis::parse::just_parse::<Announcements>(parsing_demo).unwrap();
     println!("demo-parsed: {:?}", announcements);
 
     let args = std::env::args().collect::<Vec<_>>();
