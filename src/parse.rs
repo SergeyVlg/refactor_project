@@ -823,11 +823,11 @@ pub enum AppLogErrorKind {
     LackOf(String),
     SystemError(String),
 }
-// подсказка: а поля не слишком много места на стэке занимают?
+
 /// Trace [приложения](AppLogKind)
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppLogTraceKind {
-    Connect(AuthData),
+    Connect(AuthData), //по идее теперь AuthData должен занимать мало место на стеке, т.к.внутренний массив переехал в кучу с помощью Box
     SendRequest(String),
     Check(Announcements),
     GetResponse(String),
