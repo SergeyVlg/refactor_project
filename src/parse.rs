@@ -1035,7 +1035,7 @@ impl Parsable for AppLogJournalKind {
                         strip_whitespace(tag("WithdrawCash")),
                         UserCash::parser()
                     ),
-                    |user_cash| AppLogJournalKind::DepositCash (user_cash)
+                    |user_cash| AppLogJournalKind::WithdrawCash (user_cash)
                 ),
                 map(
                     preceded(
@@ -1242,6 +1242,7 @@ mod test {
         assert_eq!(LogKind::parser().parse(r#"App::Journal DeleteUser {"user_id": "Steeve",}"#.into()), Ok(("".into(), LogKind::App(AppLogKind::Journal(AppLogJournalKind::DeleteUser{user_id: "Steeve".into()})))));
         assert_eq!(LogKind::parser().parse(r#"App::Journal RegisterAsset {"asset_id": "bayc", "liquidity": 100000000, "user_id": "Steeve",}"#.into()), Ok(("".into(), LogKind::App(AppLogKind::Journal(AppLogJournalKind::RegisterAsset{asset_id: "bayc".into(), user_id: "Steeve".into(), liquidity: 100_000_000})))));
         assert_eq!(LogKind::parser().parse(r#"App::Journal DepositCash UserCash{"user_id": "Steeve", "count": 10,}"#.into()), Ok(("".into(), LogKind::App(AppLogKind::Journal(AppLogJournalKind::DepositCash(UserCash{user_id: "Steeve".into(), count: 10}))))));
+        assert_eq!(LogKind::parser().parse(r#"App::Journal WithdrawCash UserCash{"user_id": "Steeve", "count": 10,}"#.into()), Ok(("".into(), LogKind::App(AppLogKind::Journal(AppLogJournalKind::WithdrawCash(UserCash{user_id: "Steeve".into(), count: 10}))))));
         assert_eq!(LogKind::parser().parse(r#"App::Journal BuyAsset UserBacket{"user_id": "Steeve", "backet": Backet{"asset_id":"bayc","count":1,},}"#.into()), Ok(("".into(), LogKind::App(AppLogKind::Journal(AppLogJournalKind::BuyAsset(UserBacket{user_id: "Steeve".into(), backet: Backet{asset_id: "bayc".into(),count:1}}))))));
     }
 }
